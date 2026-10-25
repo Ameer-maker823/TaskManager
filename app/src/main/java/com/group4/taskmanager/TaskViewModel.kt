@@ -26,10 +26,15 @@ data class Filters(
     val sort: Int = SORT_DUE,
     val query: String = ""
 ) {
+    /** True when a status, priority or sort choice differs from the default. */
+    val sheetActive: Boolean
+        get() = status != ANY || priority != ANY || sort != SORT_DUE
+
     companion object {
         const val ANY = -1
         const val TAB_TODAY = 0
         const val TAB_UPCOMING = 1
+        const val TAB_ALL = 2
         const val SORT_DUE = 0
         const val SORT_PRIORITY = 1
         const val SORT_NEWEST = 2
@@ -45,12 +50,17 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     private val _filters = MutableStateFlow(Filters())
     val filters: StateFlow<Filters> = _filters
 
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val tasks: StateFlow<List<TaskWithDetails>?> = _filters
         .flatMapLatest { f ->
+            // While searching, look through every task, whichever tab is selected.
+            val tab = if (f.query.isNotBlank()) Filters.TAB_ALL else f.tab
             dao.observeTasks(
                 f.query.trim(), f.status, f.priority, f.categoryId,
-                f.tab, Dates.endOfToday(), f.sort
+                tab, Dates.endOfToday(), f.sort
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -66,6 +76,25 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun setTab(tab: Int) = _filters.update { it.copy(tab = tab) }
 
     fun setCategory(id: Int) = _filters.update { it.copy(categoryId = id) }
+
+    fun setStatusFilter(status: Int) = _filters.update { it.copy(status = status) }
+
+    fun setPriorityFilter(priority: Int) = _filters.update { it.copy(priority = priority) }
+
+    fun setSort(sort: Int) = _filters.update { it.copy(sort = sort) }
+
+    fun resetSheetFilters() = _filters.update {
+        it.copy(status = Filters.ANY, priority = Filters.ANY, sort = Filters.SORT_DUE)
+    }
+
+    fun setQuery(text: String) {
+        if (text != _filters.value.query) _filters.update { it.copy(query = text) }
+    }
+
+    fun setSearching(open: Boolean) {
+        _searching.value = open
+        if (!open) _filters.update { it.copy(query = "") }
+    }
 
     fun cycleStatus(item: TaskWithDetails) {
         val task = item.task

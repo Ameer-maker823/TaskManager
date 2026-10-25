@@ -1,25 +1,33 @@
 package com.group4.taskmanager
 
 import android.animation.ObjectAnimator
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.group4.taskmanager.data.Category
 import com.group4.taskmanager.databinding.ActivityMainBinding
+import com.group4.taskmanager.databinding.SheetFilterBinding
 import kotlinx.coroutines.launch
-import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
@@ -31,6 +39,13 @@ class MainActivity : AppCompatActivity() {
         onCardClick = { openEditor(it.task.id) }
     )
     private var chipCategories: List<Category> = emptyList()
+    private var searchShown: Boolean? = null
+
+    private val backCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            viewModel.setSearching(false)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
@@ -38,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        onBackPressedDispatcher.addCallback(this, backCallback)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.main) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -59,6 +75,30 @@ class MainActivity : AppCompatActivity() {
         binding.tabToday.setOnClickListener { viewModel.setTab(Filters.TAB_TODAY) }
         binding.tabUpcoming.setOnClickListener { viewModel.setTab(Filters.TAB_UPCOMING) }
         binding.fabAdd.setOnClickListener { openEditor(-1) }
+        binding.btnFilter.setOnClickListener { showFilterSheet() }
+
+        binding.btnSearch.setOnClickListener {
+            if (viewModel.searching.value) {
+                viewModel.setSearching(false)
+            } else {
+                viewModel.setSearching(true)
+                binding.etSearch.post {
+                    binding.etSearch.requestFocus()
+                    WindowCompat.getInsetsController(window, binding.etSearch)
+                        .show(WindowInsetsCompat.Type.ime())
+                }
+            }
+        }
+        binding.etSearch.setText(viewModel.filters.value.query)
+        binding.etSearch.doAfterTextChanged { viewModel.setQuery(it?.toString().orEmpty()) }
+        binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                hideKeyboard()
+                true
+            } else {
+                false
+            }
+        }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -66,8 +106,10 @@ class MainActivity : AppCompatActivity() {
                     viewModel.tasks.collect { list ->
                         if (list == null) return@collect
                         adapter.submitList(list)
-                        binding.emptyState.visibility =
-                            if (list.isEmpty()) View.VISIBLE else View.GONE
+                        val f = viewModel.filters.value
+                        val narrowed = f.query.isNotBlank() || f.sheetActive || f.categoryId != Filters.ANY
+                        binding.tvEmpty.setText(if (narrowed) R.string.empty_search else R.string.empty_tasks)
+                        binding.emptyState.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
                 launch {
@@ -78,21 +120,61 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.filters.collect {
-                        styleTabs(it.tab)
+                        styleTabs(it)
                         highlightChip(it.categoryId)
+                        val tint = if (it.sheetActive) R.color.primary else R.color.text_primary
+                        binding.btnFilter.imageTintList =
+                            ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, tint))
                     }
                 }
                 launch {
                     viewModel.progress.collect { (done, total) -> renderProgress(done, total) }
                 }
+                launch { viewModel.searching.collect { renderSearch(it) } }
             }
         }
     }
 
-    private fun styleTabs(tab: Int) {
-        val todayOn = tab == Filters.TAB_TODAY
-        styleTab(binding.tvTabToday, binding.indToday, todayOn)
-        styleTab(binding.tvTabUpcoming, binding.indUpcoming, !todayOn)
+    private fun renderSearch(searching: Boolean) {
+        binding.btnSearch.setImageResource(if (searching) R.drawable.ic_close else R.drawable.ic_search)
+        binding.btnSearch.contentDescription =
+            getString(if (searching) R.string.cd_close_search else R.string.cd_search)
+        backCallback.isEnabled = searching
+        binding.titleBlock.visibility = if (searching) View.GONE else View.VISIBLE
+
+        val field = binding.etSearch
+        if (searchShown != searching) {
+            val animate = searchShown != null
+            searchShown = searching
+            field.animate().cancel()
+            if (searching) {
+                field.visibility = View.VISIBLE
+                if (animate) {
+                    field.alpha = 0f
+                    field.translationX = dp(24).toFloat()
+                    field.animate().alpha(1f).translationX(0f).setDuration(250).start()
+                } else {
+                    field.alpha = 1f
+                    field.translationX = 0f
+                }
+            } else {
+                field.visibility = View.GONE
+                hideKeyboard()
+                if (field.text.isNotEmpty()) field.setText("")
+            }
+        }
+    }
+
+    private fun hideKeyboard() {
+        WindowCompat.getInsetsController(window, binding.etSearch)
+            .hide(WindowInsetsCompat.Type.ime())
+        binding.etSearch.clearFocus()
+    }
+
+    private fun styleTabs(f: Filters) {
+        val dim = f.query.isNotBlank()
+        styleTab(binding.tvTabToday, binding.indToday, !dim && f.tab == Filters.TAB_TODAY)
+        styleTab(binding.tvTabUpcoming, binding.indUpcoming, !dim && f.tab == Filters.TAB_UPCOMING)
     }
 
     private fun styleTab(label: TextView, indicator: View, on: Boolean) {
@@ -145,12 +227,69 @@ class MainActivity : AppCompatActivity() {
             else chipCategories.indexOfFirst { it.id == categoryId } + 1
         for (i in 0 until binding.chipRow.childCount) {
             val chip = binding.chipRow.getChildAt(i) as TextView
-            val on = i == selected
-            chip.setBackgroundResource(if (on) R.drawable.bg_chip_on else R.drawable.bg_chip_off)
-            chip.setTextColor(
-                ContextCompat.getColor(this, if (on) android.R.color.white else R.color.text_secondary)
-            )
+            styleChip(chip, i == selected)
         }
+    }
+
+    private fun styleChip(view: TextView, on: Boolean) {
+        view.setBackgroundResource(if (on) R.drawable.bg_chip_on else R.drawable.bg_chip_off)
+        view.setTextColor(
+            ContextCompat.getColor(this, if (on) android.R.color.white else R.color.text_secondary)
+        )
+    }
+
+    private fun showFilterSheet() {
+        val sheet = SheetFilterBinding.inflate(layoutInflater)
+        val dialog = BottomSheetDialog(this)
+        dialog.setContentView(sheet.root)
+        (sheet.root.parent as? View)?.setBackgroundColor(Color.TRANSPARENT)
+
+        fun paint() {
+            val f = viewModel.filters.value
+            styleChip(sheet.fsAny, f.status == Filters.ANY)
+            styleChip(sheet.fsTodo, f.status == com.group4.taskmanager.data.Task.STATUS_TODO)
+            styleChip(sheet.fsProgress, f.status == com.group4.taskmanager.data.Task.STATUS_PROGRESS)
+            styleChip(sheet.fsDone, f.status == com.group4.taskmanager.data.Task.STATUS_DONE)
+            styleChip(sheet.fpAny, f.priority == Filters.ANY)
+            styleChip(sheet.fpLow, f.priority == com.group4.taskmanager.data.Task.PRIORITY_LOW)
+            styleChip(sheet.fpMedium, f.priority == com.group4.taskmanager.data.Task.PRIORITY_MEDIUM)
+            styleChip(sheet.fpHigh, f.priority == com.group4.taskmanager.data.Task.PRIORITY_HIGH)
+            styleChip(sheet.soDue, f.sort == Filters.SORT_DUE)
+            styleChip(sheet.soPriority, f.sort == Filters.SORT_PRIORITY)
+            styleChip(sheet.soNewest, f.sort == Filters.SORT_NEWEST)
+        }
+
+        sheet.fsAny.setOnClickListener { viewModel.setStatusFilter(Filters.ANY); paint() }
+        sheet.fsTodo.setOnClickListener {
+            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_TODO); paint()
+        }
+        sheet.fsProgress.setOnClickListener {
+            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_PROGRESS); paint()
+        }
+        sheet.fsDone.setOnClickListener {
+            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_DONE); paint()
+        }
+
+        sheet.fpAny.setOnClickListener { viewModel.setPriorityFilter(Filters.ANY); paint() }
+        sheet.fpLow.setOnClickListener {
+            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_LOW); paint()
+        }
+        sheet.fpMedium.setOnClickListener {
+            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_MEDIUM); paint()
+        }
+        sheet.fpHigh.setOnClickListener {
+            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_HIGH); paint()
+        }
+
+        sheet.soDue.setOnClickListener { viewModel.setSort(Filters.SORT_DUE); paint() }
+        sheet.soPriority.setOnClickListener { viewModel.setSort(Filters.SORT_PRIORITY); paint() }
+        sheet.soNewest.setOnClickListener { viewModel.setSort(Filters.SORT_NEWEST); paint() }
+
+        sheet.btnReset.setOnClickListener { viewModel.resetSheetFilters(); paint() }
+        sheet.btnApply.setOnClickListener { dialog.dismiss() }
+
+        paint()
+        dialog.show()
     }
 
     private fun openEditor(id: Int) {

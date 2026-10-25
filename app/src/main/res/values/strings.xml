@@ -63,4 +63,14 @@
     <string name="delete_title">Delete this task?</string>
     <string name="delete_message">The task and its checklist will be removed. This cannot be undone.</string>
     <string name="no_due_date">No due date</string>
+
+    <string name="title_filter">Filter and sort</string>
+    <string name="filter_any">Any</string>
+    <string name="label_sort">Sort by</string>
+    <string name="sort_due">Due date</string>
+    <string name="sort_priority">Priority</string>
+    <string name="sort_newest">Newest</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_show_results">Show results</string>
+    <string name="cd_close_search">Close search</string>
 </resources>
