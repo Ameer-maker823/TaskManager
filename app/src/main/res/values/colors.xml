@@ -2,4 +2,33 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="bg_top">#EFE9FF</color>
+    <color name="bg_bottom">#FBF9FF</color>
+
+    <color name="primary">#5B3FA8</color>
+    <color name="primary_light">#8E6FD8</color>
+    <color name="primary_soft">#F3EEFF</color>
+    <color name="ring_track">#E6DFFA</color>
+
+    <color name="card">#FFFFFF</color>
+    <color name="card_stroke">#1F5B3FA8</color>
+
+    <color name="text_primary">#2A2150</color>
+    <color name="text_secondary">#7A6FA8</color>
+    <color name="text_muted">#A59CC8</color>
+    <color name="outline">#BDB2E6</color>
+
+    <color name="danger">#D6454F</color>
+    <color name="priority_low">#7BC9A0</color>
+    <color name="priority_medium">#F0B14A</color>
+    <color name="priority_high">#D6454F</color>
+
+    <color name="cat_blue">#5B6BE8</color>
+    <color name="cat_green">#2DAA7A</color>
+    <color name="cat_orange">#E8913A</color>
+    <color name="cat_pink">#D45FA0</color>
+    <color name="cat_teal">#1AA6B7</color>
+    <color name="cat_red">#E5575A</color>
+    <color name="cat_violet">#9B59D0</color>
+    <color name="cat_amber">#D9A21B</color>
 </resources>
