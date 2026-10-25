@@ -9,6 +9,8 @@ android {
         version = release(36)
     }
 
+    buildFeatures { viewBinding = true }
+
     defaultConfig {
         applicationId = "com.group4.taskmanager"
         minSdk = 29
