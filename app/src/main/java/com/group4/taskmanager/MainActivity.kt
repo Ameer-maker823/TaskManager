@@ -19,6 +19,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.group4.taskmanager.data.Category
 import com.group4.taskmanager.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
+import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
@@ -27,7 +28,7 @@ class MainActivity : AppCompatActivity() {
     private val adapter = TaskAdapter(
         onStatusClick = { viewModel.cycleStatus(it) },
         onSubtaskClick = { viewModel.toggleSubtask(it) },
-        onCardClick = { }
+        onCardClick = { openEditor(it.task.id) }
     )
     private var chipCategories: List<Category> = emptyList()
 
@@ -57,7 +58,7 @@ class MainActivity : AppCompatActivity() {
         binding.rvTasks.adapter = adapter
         binding.tabToday.setOnClickListener { viewModel.setTab(Filters.TAB_TODAY) }
         binding.tabUpcoming.setOnClickListener { viewModel.setTab(Filters.TAB_UPCOMING) }
-        binding.fabAdd.setOnClickListener { viewModel.addSample() }
+        binding.fabAdd.setOnClickListener { openEditor(-1) }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -150,6 +151,10 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.getColor(this, if (on) android.R.color.white else R.color.text_secondary)
             )
         }
+    }
+
+    private fun openEditor(id: Int) {
+        startActivity(Intent(this, EditTaskActivity::class.java).putExtra(EditTaskActivity.EXTRA_TASK_ID, id))
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()

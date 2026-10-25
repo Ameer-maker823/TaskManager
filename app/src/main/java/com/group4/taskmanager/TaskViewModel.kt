@@ -94,24 +94,4 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             if (status != item.task.status) dao.setStatus(item.task.id, status)
         }
     }
-
-    // Temporary: lets us test the list before the editor exists.
-    fun addSample() {
-        viewModelScope.launch {
-            val titles = listOf(
-                "Plan the week", "Write lab report", "Call the dentist",
-                "Water the plants", "Review notes", "Pay the bills"
-            )
-            val steps = listOf("Gather materials", "Do the first part", "Check and finish")
-            dao.saveTask(
-                Task(
-                    title = titles.random(),
-                    dueAt = Dates.daysFromToday((-1..3).random()),
-                    priority = (0..2).random(),
-                    categoryId = categories.value.randomOrNull()?.id
-                ),
-                steps.shuffled().take((0..3).random()).map { Subtask(taskId = 0, title = it) }
-            )
-        }
-    }
 }

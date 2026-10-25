@@ -51,4 +51,16 @@
     <string name="cd_back">Back</string>
     <string name="cd_status">Change status</string>
     <string name="cd_expand">Show checklist</string>
+
+    <string name="action_add">Add</string>
+    <string name="action_clear_date">Clear</string>
+    <string name="chip_new_category">+ New</string>
+    <string name="cd_remove_step">Remove step</string>
+    <string name="cd_add_step">Add step</string>
+    <string name="msg_title_required">Please enter a title</string>
+    <string name="msg_name_required">Enter a category name</string>
+    <string name="msg_category_exists">That category already exists</string>
+    <string name="delete_title">Delete this task?</string>
+    <string name="delete_message">The task and its checklist will be removed. This cannot be undone.</string>
+    <string name="no_due_date">No due date</string>
 </resources>
