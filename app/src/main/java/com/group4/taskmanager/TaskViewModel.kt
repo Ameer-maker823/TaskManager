@@ -123,4 +123,12 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             if (status != item.task.status) dao.setStatus(item.task.id, status)
         }
     }
+
+    fun delete(item: TaskWithDetails) {
+        viewModelScope.launch { dao.deleteTasks(listOf(item.task)) }
+    }
+
+    fun restore(item: TaskWithDetails) {
+        viewModelScope.launch { dao.restore(listOf(item)) }
+    }
 }

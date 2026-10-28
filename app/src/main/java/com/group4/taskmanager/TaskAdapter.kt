@@ -1,6 +1,5 @@
 package com.group4.taskmanager
 
-import android.content.res.ColorStateList
 import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.transition.AutoTransition
@@ -8,11 +7,13 @@ import android.transition.TransitionManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import android.content.res.ColorStateList
 import com.group4.taskmanager.data.Subtask
 import com.group4.taskmanager.data.Task
 import com.group4.taskmanager.data.TaskWithDetails
@@ -29,6 +30,8 @@ class TaskAdapter(
 
     class TaskViewHolder(val binding: ItemTaskBinding) : RecyclerView.ViewHolder(binding.root)
 
+    fun taskAt(position: Int): TaskWithDetails = getItem(position)
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TaskViewHolder {
         val binding = ItemTaskBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return TaskViewHolder(binding)
@@ -42,9 +45,10 @@ class TaskAdapter(
         val done = task.status == Task.STATUS_DONE
 
         b.tvTaskTitle.text = task.title
-        strike(b.tvTaskTitle.also {
-            it.setTextColor(ContextCompat.getColor(context, if (done) R.color.text_muted else R.color.text_primary))
-        }, done)
+        b.tvTaskTitle.setTextColor(
+            ContextCompat.getColor(context, if (done) R.color.text_muted else R.color.text_primary)
+        )
+        strike(b.tvTaskTitle, done)
 
         b.btnStatus.setBackgroundResource(
             when (task.status) {
@@ -54,7 +58,12 @@ class TaskAdapter(
             }
         )
         if (done) b.btnStatus.setImageResource(R.drawable.ic_check) else b.btnStatus.setImageDrawable(null)
-        b.btnStatus.setOnClickListener { onStatusClick(item) }
+        b.btnStatus.setOnClickListener { view ->
+            view.animate().scaleX(0.75f).scaleY(0.75f).setDuration(80).withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+            }.start()
+            onStatusClick(item)
+        }
 
         val category = item.category
         if (category == null) {
@@ -119,7 +128,7 @@ class TaskAdapter(
         b.taskCard.setOnClickListener { onCardClick(item) }
     }
 
-    private fun strike(view: android.widget.TextView, on: Boolean) {
+    private fun strike(view: TextView, on: Boolean) {
         view.paintFlags = if (on) {
             view.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
         } else {

@@ -1,11 +1,14 @@
 package com.group4.taskmanager
 
 import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.view.animation.AnimationUtils
+import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -23,8 +26,12 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.snackbar.Snackbar
 import com.group4.taskmanager.data.Category
+import com.group4.taskmanager.data.Task
 import com.group4.taskmanager.databinding.ActivityMainBinding
 import com.group4.taskmanager.databinding.SheetFilterBinding
 import kotlinx.coroutines.launch
@@ -40,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     )
     private var chipCategories: List<Category> = emptyList()
     private var searchShown: Boolean? = null
+    private var shownKey: Int? = null
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -72,10 +80,28 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.rvTasks.adapter = adapter
+        binding.rvTasks.layoutAnimation =
+            AnimationUtils.loadLayoutAnimation(this, R.anim.layout_task_enter)
+        ItemTouchHelper(SwipeToDeleteCallback(this) { deleteAt(it) })
+            .attachToRecyclerView(binding.rvTasks)
+
         binding.tabToday.setOnClickListener { viewModel.setTab(Filters.TAB_TODAY) }
         binding.tabUpcoming.setOnClickListener { viewModel.setTab(Filters.TAB_UPCOMING) }
         binding.fabAdd.setOnClickListener { openEditor(-1) }
         binding.btnFilter.setOnClickListener { showFilterSheet() }
+
+        if (savedInstanceState == null) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                binding.fabAdd,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 0f, 1f),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 0f, 1f)
+            ).apply {
+                duration = 450
+                startDelay = 300
+                interpolator = OvershootInterpolator()
+                start()
+            }
+        }
 
         binding.btnSearch.setOnClickListener {
             if (viewModel.searching.value) {
@@ -105,8 +131,16 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.tasks.collect { list ->
                         if (list == null) return@collect
-                        adapter.submitList(list)
                         val f = viewModel.filters.value
+                        val key = listOf(f.tab, f.categoryId, f.status, f.priority).hashCode()
+                        val replay = adapter.itemCount == 0 || key != shownKey
+                        shownKey = key
+
+                        adapter.submitList(list) {
+                            if (replay && list.isNotEmpty()) {
+                                binding.rvTasks.scheduleLayoutAnimation()
+                            }
+                        }
                         val narrowed = f.query.isNotBlank() || f.sheetActive || f.categoryId != Filters.ANY
                         binding.tvEmpty.setText(if (narrowed) R.string.empty_search else R.string.empty_tasks)
                         binding.emptyState.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
@@ -133,6 +167,19 @@ class MainActivity : AppCompatActivity() {
                 launch { viewModel.searching.collect { renderSearch(it) } }
             }
         }
+    }
+
+    private fun deleteAt(position: Int) {
+        if (position == RecyclerView.NO_POSITION || position >= adapter.itemCount) return
+        val item = adapter.taskAt(position)
+        viewModel.delete(item)
+        Snackbar.make(binding.main, R.string.task_deleted, Snackbar.LENGTH_LONG)
+            .setAnchorView(binding.fabAdd)
+            .setBackgroundTint(ContextCompat.getColor(this, R.color.text_primary))
+            .setTextColor(Color.WHITE)
+            .setActionTextColor(ContextCompat.getColor(this, R.color.ring_track))
+            .setAction(R.string.action_undo) { viewModel.restore(item) }
+            .show()
     }
 
     private fun renderSearch(searching: Boolean) {
@@ -247,39 +294,27 @@ class MainActivity : AppCompatActivity() {
         fun paint() {
             val f = viewModel.filters.value
             styleChip(sheet.fsAny, f.status == Filters.ANY)
-            styleChip(sheet.fsTodo, f.status == com.group4.taskmanager.data.Task.STATUS_TODO)
-            styleChip(sheet.fsProgress, f.status == com.group4.taskmanager.data.Task.STATUS_PROGRESS)
-            styleChip(sheet.fsDone, f.status == com.group4.taskmanager.data.Task.STATUS_DONE)
+            styleChip(sheet.fsTodo, f.status == Task.STATUS_TODO)
+            styleChip(sheet.fsProgress, f.status == Task.STATUS_PROGRESS)
+            styleChip(sheet.fsDone, f.status == Task.STATUS_DONE)
             styleChip(sheet.fpAny, f.priority == Filters.ANY)
-            styleChip(sheet.fpLow, f.priority == com.group4.taskmanager.data.Task.PRIORITY_LOW)
-            styleChip(sheet.fpMedium, f.priority == com.group4.taskmanager.data.Task.PRIORITY_MEDIUM)
-            styleChip(sheet.fpHigh, f.priority == com.group4.taskmanager.data.Task.PRIORITY_HIGH)
+            styleChip(sheet.fpLow, f.priority == Task.PRIORITY_LOW)
+            styleChip(sheet.fpMedium, f.priority == Task.PRIORITY_MEDIUM)
+            styleChip(sheet.fpHigh, f.priority == Task.PRIORITY_HIGH)
             styleChip(sheet.soDue, f.sort == Filters.SORT_DUE)
             styleChip(sheet.soPriority, f.sort == Filters.SORT_PRIORITY)
             styleChip(sheet.soNewest, f.sort == Filters.SORT_NEWEST)
         }
 
         sheet.fsAny.setOnClickListener { viewModel.setStatusFilter(Filters.ANY); paint() }
-        sheet.fsTodo.setOnClickListener {
-            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_TODO); paint()
-        }
-        sheet.fsProgress.setOnClickListener {
-            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_PROGRESS); paint()
-        }
-        sheet.fsDone.setOnClickListener {
-            viewModel.setStatusFilter(com.group4.taskmanager.data.Task.STATUS_DONE); paint()
-        }
+        sheet.fsTodo.setOnClickListener { viewModel.setStatusFilter(Task.STATUS_TODO); paint() }
+        sheet.fsProgress.setOnClickListener { viewModel.setStatusFilter(Task.STATUS_PROGRESS); paint() }
+        sheet.fsDone.setOnClickListener { viewModel.setStatusFilter(Task.STATUS_DONE); paint() }
 
         sheet.fpAny.setOnClickListener { viewModel.setPriorityFilter(Filters.ANY); paint() }
-        sheet.fpLow.setOnClickListener {
-            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_LOW); paint()
-        }
-        sheet.fpMedium.setOnClickListener {
-            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_MEDIUM); paint()
-        }
-        sheet.fpHigh.setOnClickListener {
-            viewModel.setPriorityFilter(com.group4.taskmanager.data.Task.PRIORITY_HIGH); paint()
-        }
+        sheet.fpLow.setOnClickListener { viewModel.setPriorityFilter(Task.PRIORITY_LOW); paint() }
+        sheet.fpMedium.setOnClickListener { viewModel.setPriorityFilter(Task.PRIORITY_MEDIUM); paint() }
+        sheet.fpHigh.setOnClickListener { viewModel.setPriorityFilter(Task.PRIORITY_HIGH); paint() }
 
         sheet.soDue.setOnClickListener { viewModel.setSort(Filters.SORT_DUE); paint() }
         sheet.soPriority.setOnClickListener { viewModel.setSort(Filters.SORT_PRIORITY); paint() }

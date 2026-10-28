@@ -89,6 +89,12 @@ class EditTaskActivity : AppCompatActivity() {
                 launch { viewModel.categories.collect { renderCategories() } }
             }
         }
+
+        if (savedInstanceState == null) {
+            binding.content.alpha = 0f
+            binding.content.translationY = dp(24).toFloat()
+            binding.content.animate().alpha(1f).translationY(0f).setDuration(350).start()
+        }
     }
 
     private fun render(draft: Draft) {
